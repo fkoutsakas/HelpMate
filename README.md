@@ -50,11 +50,11 @@
 
 Ειδικότερα θα χρειαστούμε τον παρακάτω εξοπλισμό:
 
-- Lithium Battery Charger Module 1A USB-C - TP4056	€099
-- Waveshare ESP32-C3 Mini - WiFi & Bluetooth 5	€580
+- Lithium Battery Charger Module 1A USB-C - TP4056	€0,99
+- Waveshare ESP32-C3 Mini - WiFi & Bluetooth 5	€5,80
 - DFRobot Αισθητήρας Καρδιακών Παλμών & Οξύμετρο - MAX30102	€1990
-- Επιταχυνσιόμετρο & Γυροσκόπιο 3 Αξόνων IMU - MPU6050 (Soldered Header)	€360
-- 2 x Tact Switch 12x12mm 7.3mm		€015
+- Επιταχυνσιόμετρο & Γυροσκόπιο 3 Αξόνων IMU - MPU6050 (Soldered Header)	€3,60
+- 2 x Tact Switch 12x12mm 7.3mm		€0,15
 - Μπαταρία 3.7V Li-Po για Τηλεκατευθυνόμενο με Χωρητικότητα 500mAh 	7,00€
 - Oled Display 1.3inch 6.80€: https://grobotronics.com/oled-module-1.3-128x64-i2c-white.html 
 - 2 x αναλώσιμα 3d εκτυπωτή 2 x 15 €

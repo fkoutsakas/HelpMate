@@ -1,0 +1,268 @@
+  #include <Wire.h>
+  #include <Adafruit_GFX.h>
+  #include <Adafruit_SH110X.h>
+  #include <RTClib.h>
+  #include <Adafruit_Sensor.h>
+  #include <Adafruit_BME680.h>
+  #include "I2Cdev.h"
+  #include "MPU6050.h"
+  #include <BLEDevice.h>
+  #include <BLEUtils.h>
+  #include <BLEServer.h>
+
+  // Create MPU6050 instance
+  MPU6050 mpu(0x69); 
+
+  // Display
+  Adafruit_SH1106G display(128, 64, &Wire, -1); 
+  RTC_DS3231 rtc;
+  Adafruit_BME680 bme; 
+
+  // Variables
+  int steps = 1234;
+  String weather = "25C";
+  int hours, minutes, seconds;
+  int day, month, year;
+
+  // MPU6050 Data
+  int16_t ax, ay, az, gx, gy, gz;
+
+  bool fallDetected = false;
+  bool countdownActive = false;
+  unsigned long countdownStartTime = 0;
+
+  // Define the bitmap icon(16x16)
+  const uint8_t ICON_CAMERA[] = {
+    0xe7, 0xeb, 0x6d, 0xad, 0xcb, 0xe7, 0xcb, 0xad, 0x6d, 0xeb, 0xe7
+  };
+
+  const uint8_t ICON_CAMERA2[] = {
+    0x18, 0x14, 0x92, 0x52, 0x34, 0x18, 0x34, 0x52, 0x92, 0x14, 0x18
+  };
+
+  const uint8_t Weather[] = {
+    // 'weath12', 16x16px
+    0x00, 0x00, 0x48, 0x81, 0x26, 0x4a, 0x11, 0x54, 0x08, 0x04, 0x11, 0xc0, 0x23, 0xe2, 0x07, 0xf4, 
+    0x87, 0xf0, 0x67, 0xf4, 0x03, 0xe3, 0x11, 0xc8, 0x22, 0x10, 0x49, 0x84, 0x04, 0x72, 0x00, 0x01
+  };
+
+  const uint8_t Steps[] = {
+    // 'feet', 16x16px
+    0x00, 0x00, 0x00, 0x18, 0x00, 0x24, 0x08, 0x24, 0x14, 0x42, 0x22, 0x42, 0x22, 0x42, 0x22, 0x7c, 
+    0x22, 0x00, 0x3e, 0x70, 0x00, 0x48, 0x1e, 0x48, 0x12, 0x70, 0x12, 0x00, 0x0e, 0x00, 0x00, 0x00
+  };
+
+  const uint8_t Danger[] = {
+    // 'Danger2', 32x32px
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+    0x00, 0x03, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x0c, 0xc0, 0x00, 0x00, 0x0c, 0xc0, 0x00, 
+    0x00, 0x3c, 0xf0, 0x00, 0x00, 0x3c, 0xf0, 0x00, 0x00, 0x30, 0x30, 0x00, 0x00, 0x30, 0x30, 0x00, 
+    0x00, 0xc3, 0x0c, 0x00, 0x00, 0xc3, 0x0c, 0x00, 0x00, 0xc3, 0x0c, 0x00, 0x00, 0xc3, 0x0c, 0x00, 
+    0x03, 0xc3, 0x0f, 0x00, 0x03, 0xc3, 0x0f, 0x00, 0x03, 0x00, 0x03, 0x00, 0x03, 0x00, 0x03, 0x00, 
+    0x0f, 0x03, 0x03, 0xc0, 0x0f, 0x03, 0x03, 0xc0, 0x0c, 0x00, 0x00, 0xc0, 0x0c, 0x00, 0x00, 0xc0, 
+    0x0f, 0xff, 0xff, 0xc0, 0x0f, 0xff, 0xff, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+  };
+
+  const uint8_t Danger2[] = {
+    // 'Danger3', 32x32px
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
+    0xff, 0xfc, 0xff, 0xff, 0xff, 0xfc, 0xff, 0xff, 0xff, 0xf3, 0x3f, 0xff, 0xff, 0xf3, 0x3f, 0xff, 
+    0xff, 0xc3, 0x0f, 0xff, 0xff, 0xc3, 0x0f, 0xff, 0xff, 0xcf, 0xcf, 0xff, 0xff, 0xcf, 0xcf, 0xff, 
+    0xff, 0x3c, 0xf3, 0xff, 0xff, 0x3c, 0xf3, 0xff, 0xff, 0x3c, 0xf3, 0xff, 0xff, 0x3c, 0xf3, 0xff, 
+    0xfc, 0x3c, 0xf0, 0xff, 0xfc, 0x3c, 0xf0, 0xff, 0xfc, 0xff, 0xfc, 0xff, 0xfc, 0xff, 0xfc, 0xff, 
+    0xf0, 0xfc, 0xfc, 0x3f, 0xf0, 0xfc, 0xfc, 0x3f, 0xf3, 0xff, 0xff, 0x3f, 0xf3, 0xff, 0xff, 0x3f, 
+    0xf0, 0x00, 0x00, 0x3f, 0xf0, 0x00, 0x00, 0x3f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+  };
+
+  #define ICON_WIDTH 8
+  #define ICON_HEIGHT 11
+
+  #define ICON_WIDTH2 16
+  #define ICON_HEIGHT2 16
+
+  #define ICON_WIDTH3 32
+  #define ICON_HEIGHT3 32
+
+  // Function Declarations
+  void drawDisplay();
+  void mpuCalibrate();
+  void checkFallDetection();
+
+  // BLE Service and Characteristic
+  BLECharacteristic *fallCharacteristic;
+  BLEServer *pServer; 
+
+  class MySecurity : public BLESecurityCallbacks {
+    uint32_t onPassKeyRequest() { return 123456; }
+    void onPassKeyNotify(uint32_t pass_key) {}
+    bool onConfirmPIN(uint32_t pass_key) { return true; }
+    bool onSecurityRequest() { return true; }
+    void onAuthenticationComplete(esp_ble_auth_cmpl_t cmpl) {}
+  };
+
+  void setup() {
+    Serial.begin(115200);
+
+  BLEDevice::init("Helpmate");
+  pServer = BLEDevice::createServer();
+
+  BLESecurity *pSecurity = new BLESecurity();
+  pSecurity->setAuthenticationMode(ESP_LE_AUTH_NO_BOND);
+  pSecurity->setCapability(ESP_IO_CAP_NONE);
+  pSecurity->setInitEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
+
+  // Create a BLE Service
+  BLEService *fallService = pServer->createService("180D");  // Heart Rate UUID used as generic example
+
+  // Create a BLE Characteristic
+  fallCharacteristic = fallService->createCharacteristic(
+                        "2A37", // Characteristic UUID (Heart Rate Measurement as example)
+                        BLECharacteristic::PROPERTY_READ |
+                        BLECharacteristic::PROPERTY_NOTIFY
+                      );
+
+  // Set initial value
+  fallCharacteristic->setValue("No Fall");
+
+  // Start the service
+  fallService->start();
+
+  // Start advertising
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID("180D");
+  pAdvertising->start();
+
+  Serial.println("BLE advertising as 'Helpmate'...");
+
+    // I2C
+    Wire.begin(8, 9); // Custom SDA/SCL
+
+    // Display
+    if (!display.begin(0x3C, true)) {
+      Serial.println(F("Display not found"));
+      while (1);
+    }
+
+    // RTC
+    if (!rtc.begin()) {
+      Serial.println("Couldn't find RTC");
+      while (1);
+    }
+    if (rtc.lostPower()) {
+      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    }
+
+    // BME680
+    if (!bme.begin()) {
+      Serial.println("BME680 not found");
+      while (1);
+    }
+    bme.setTemperatureOversampling(BME680_OS_8X);
+    bme.setHumidityOversampling(BME680_OS_2X);
+    bme.setPressureOversampling(BME680_OS_4X);
+    bme.setGasHeater(320, 150);
+
+    // MPU6050
+    Serial.println("Initializing MPU6050...");
+    mpu.initialize();
+    if (!mpu.testConnection()) {
+      Serial.println("MPU6050 connection failed");
+      while (1);
+    }
+    Serial.println("MPU6050 connected");
+
+    mpuCalibrate(); // Run calibration
+
+    drawDisplay();
+  }
+
+  void loop() {
+    // RTC
+    DateTime now = rtc.now();
+    hours = now.hour(); minutes = now.minute(); seconds = now.second();
+    day = now.day(); month = now.month(); year = now.year() % 100;
+
+    // BME680 Reading
+    if (bme.performReading()) {
+      weather = String(bme.temperature, 1) + "C";
+    }
+
+    checkFallDetection();
+    drawDisplay();
+
+    delay(50);
+  }
+
+  void mpuCalibrate() {
+    Serial.println("Calibrating MPU6050...");
+    mpu.CalibrateAccel(6);
+    mpu.CalibrateGyro(6);
+    mpu.setDLPFMode(MPU6050_DLPF_BW_42);
+    Serial.println("Calibration done.");
+    mpu.PrintActiveOffsets();
+  }
+
+void checkFallDetection() {
+  mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+  float acceleration = sqrt((float)ax * ax + (float)ay * ay + (float)az * az);
+
+  Serial.print("Acceleration: ");
+  Serial.println(acceleration);
+
+  // Trigger fall
+  if (acceleration < 9000 && !fallDetected) {
+    Serial.println("Fall Detected!");
+    fallDetected = true;
+    countdownActive = true;
+    countdownStartTime = millis();
+
+    // Send BLE message
+    if (fallCharacteristic) {
+      Serial.println("msg sent!");
+      fallCharacteristic->setValue("Fall Detected!");
+      fallCharacteristic->notify();
+    }
+  }
+
+  // Reset fall detection after 5 seconds
+  if (fallDetected && countdownActive && millis() - countdownStartTime > 5000) {
+    Serial.println("Resetting fall status.");
+    fallDetected = false;
+    countdownActive = false;
+
+    if (fallCharacteristic) {
+      fallCharacteristic->setValue("No Fall");
+      fallCharacteristic->notify();
+    }
+  }
+}
+
+  void drawDisplay() {
+    display.clearDisplay();
+    display.setTextColor(SH110X_WHITE);
+    display.setTextSize(2);
+    display.setCursor(0, 2);
+    display.printf("%02d:%02d:%02d", hours, minutes, seconds);
+    display.setTextSize(1);
+    display.setCursor(2, 23);
+    display.printf("%02d/%02d/%02d", day, month, year);
+    display.setCursor(21, 44); display.print(weather);
+    display.setCursor(57, 44); display.print(steps);
+    display.drawLine(0, 20, 128, 20, SH110X_WHITE);
+    display.drawLine(0, 32, 50, 32, SH110X_WHITE);
+    display.drawLine(50, 20, 50, 64, SH110X_WHITE);
+    display.drawLine(88, 20, 88, 64, SH110X_WHITE);
+    display.drawBitmap(4, 40, Weather, 16, 16, SH110X_WHITE);
+    display.drawBitmap(61, 23, Steps, 16, 16, SH110X_WHITE);
+    display.drawBitmap(107, 5, ICON_CAMERA2, 8, 11, SH110X_WHITE);
+
+    if(!fallDetected){
+      display.drawBitmap(95, 25, Danger, 32, 32, SH110X_WHITE);
+    }else{
+      display.drawBitmap(95, 25, Danger2, 32, 32, SH110X_WHITE);
+    }    
+  
+    display.display();
+  }
